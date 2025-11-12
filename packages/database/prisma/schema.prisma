@@ -1,0 +1,444 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [uuidOssp(map: "uuid-ossp")]
+}
+
+// Enums
+enum UserRole {
+  SUPERVISOR
+  OPERATOR
+}
+
+enum WorkOrderStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum StepStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+// Organizations
+model Organization {
+  id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name             String   @db.VarChar(255)
+  subscriptionTier String   @default("free") @map("subscription_tier") @db.VarChar(50)
+  settings         Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  users             User[]
+  entities          Entity[]
+  formTemplates     FormTemplate[]
+  workflows         Workflow[]
+  workflowInstances WorkflowInstance[]
+  collections       Collection[]
+  rules             Rule[]
+  teams             Team[]
+  workOrders        WorkOrder[]
+
+  @@map("organizations")
+}
+
+// Users
+model User {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  email     String   @unique @db.VarChar(255)
+  name      String?  @db.VarChar(255)
+  password  String?  @db.VarChar(255) // Hashed password
+  role      UserRole @default(OPERATOR)
+  teamId    String?  @map("team_id") @db.Uuid
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  organization             Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team                     Team?                  @relation(fields: [teamId], references: [id])
+  formTemplatesCreated     FormTemplate[]
+  workflowsCreated         Workflow[]
+  formSubmissions          FormSubmission[]
+  attachmentsUploaded      Attachment[]
+  collectionsCreated       Collection[]
+  markersCreated           Marker[]
+  syncQueue                SyncQueue[]
+  workflowInstancesStarted WorkflowInstance[]
+  workflowStepsCompleted   WorkflowStepInstance[]
+  workOrdersCreated        WorkOrder[]            @relation("CreatedWorkOrders")
+  workOrdersClaimed        WorkOrder[]            @relation("ClaimedWorkOrders")
+  assignedSteps            WorkOrderStep[]        @relation("AssignedSteps")
+  completedSteps           WorkOrderStep[]        @relation("CompletedSteps")
+
+  @@map("users")
+}
+
+// Entities (polymorphic - can represent any field object)
+model Entity {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orgId      String    @map("org_id") @db.Uuid
+  entityType String    @map("entity_type") @db.VarChar(50)
+  parentId   String?   @map("parent_id") @db.Uuid
+  name       String?   @db.VarChar(255)
+  code       String?   @db.VarChar(100) // For QR/barcode scanning
+  metadata   Json      @default("{}")
+  geometry   String?   @db.VarChar // Stored as WKT (Well-Known Text)
+  tags       String[]  @default([])
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  organization           Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  parent                 Entity?                @relation("EntityHierarchy", fields: [parentId], references: [id])
+  children               Entity[]               @relation("EntityHierarchy")
+  formSubmissions        FormSubmission[]
+  markers                Marker[]
+  relationshipsAsSource  EntityRelationship[]   @relation("SourceEntity")
+  relationshipsAsTarget  EntityRelationship[]   @relation("TargetEntity")
+
+  @@index([orgId, entityType])
+  @@index([tags])
+  @@map("entities")
+}
+
+// Entity Relationships
+model EntityRelationship {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sourceEntityId   String    @map("source_entity_id") @db.Uuid
+  targetEntityId   String    @map("target_entity_id") @db.Uuid
+  relationshipType String    @map("relationship_type") @db.VarChar(50)
+  properties       Json      @default("{}")
+  validFrom        DateTime  @default(now()) @map("valid_from")
+  validTo          DateTime? @map("valid_to")
+
+  sourceEntity Entity @relation("SourceEntity", fields: [sourceEntityId], references: [id], onDelete: Cascade)
+  targetEntity Entity @relation("TargetEntity", fields: [targetEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceEntityId, targetEntityId, relationshipType])
+  @@map("entity_relationships")
+}
+
+// Form Templates
+model FormTemplate {
+  id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orgId            String   @map("org_id") @db.Uuid
+  name             String   @db.VarChar(255)
+  description      String?  @db.Text
+  category         String?  @db.VarChar(100)
+  version          Int      @default(1)
+  parentTemplateId String?  @map("parent_template_id") @db.Uuid
+  schema           Json // Form field definitions
+  variables        Json     @default("{}")
+  computedFields   Json     @default("{}") @map("computed_fields")
+  validations      Json     @default("{}")
+  isActive         Boolean  @default(true) @map("is_active")
+  isPublic         Boolean  @default(false) @map("is_public")
+  createdBy        String   @map("created_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  organization    Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  creator         User             @relation(fields: [createdBy], references: [id])
+  parentTemplate  FormTemplate?    @relation("TemplateVersions", fields: [parentTemplateId], references: [id])
+  childTemplates  FormTemplate[]   @relation("TemplateVersions")
+  formSubmissions FormSubmission[]
+
+  @@map("form_templates")
+}
+
+// Workflows
+model Workflow {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orgId           String   @map("org_id") @db.Uuid
+  name            String   @db.VarChar(255)
+  description     String?  @db.Text
+  definition      Json // Workflow definition with step primitives
+  triggerConfig   Json     @map("trigger_config")
+  steps           Json // Array of step definitions (legacy)
+  contextSchema   Json     @default("{}") @map("context_schema")
+  completionRules Json     @default("{}") @map("completion_rules")
+  scheduling      Json     @default("{}")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdBy       String   @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization      Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  creator           User               @relation(fields: [createdBy], references: [id])
+  workflowInstances WorkflowInstance[]
+  workOrders        WorkOrder[]
+
+  @@map("workflows")
+}
+
+// Workflow Instances (Running workflows)
+model WorkflowInstance {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workflowId       String    @map("workflow_id") @db.Uuid
+  orgId            String    @map("org_id") @db.Uuid
+  parentInstanceId String?   @map("parent_instance_id") @db.Uuid
+  triggerData      Json      @default("{}") @map("trigger_data")
+  context          Json      @default("{}")
+  currentStep      Int       @default(0) @map("current_step")
+  status           String    @default("pending") @db.VarChar(50)
+  startedAt        DateTime? @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  startedBy        String    @map("started_by") @db.Uuid
+
+  workflow         Workflow               @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  organization     Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  starter          User                   @relation(fields: [startedBy], references: [id])
+  parentInstance   WorkflowInstance?      @relation("WorkflowHierarchy", fields: [parentInstanceId], references: [id])
+  childInstances   WorkflowInstance[]     @relation("WorkflowHierarchy")
+  stepInstances    WorkflowStepInstance[]
+
+  @@index([orgId, status])
+  @@map("workflow_instances")
+}
+
+// Workflow Step Instances
+model WorkflowStepInstance {
+  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workflowInstanceId String    @map("workflow_instance_id") @db.Uuid
+  stepIndex          Int       @map("step_index")
+  stepType           String    @map("step_type") @db.VarChar(50)
+  stepConfig         Json      @map("step_config")
+  assignedTo         String[]  @map("assigned_to") @db.Uuid
+  assignedEntities   String[]  @map("assigned_entities") @db.Uuid
+  status             String    @default("pending") @db.VarChar(50)
+  inputData          Json      @default("{}") @map("input_data")
+  outputData         Json      @default("{}") @map("output_data")
+  startedAt          DateTime? @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+  completedBy        String?   @map("completed_by") @db.Uuid
+
+  workflowInstance WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
+  completer        User?            @relation(fields: [completedBy], references: [id])
+  formSubmissions  FormSubmission[]
+
+  @@map("workflow_step_instances")
+}
+
+// Collections (Groups of related submissions)
+model Collection {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orgId          String    @map("org_id") @db.Uuid
+  collectionType String    @map("collection_type") @db.VarChar(50)
+  name           String?   @db.VarChar(255)
+  metadata       Json      @default("{}")
+  entityIds      String[]  @default([]) @map("entity_ids") @db.Uuid
+  status         String    @default("active") @db.VarChar(50)
+  startedAt      DateTime  @default(now()) @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdBy      String    @map("created_by") @db.Uuid
+
+  organization    Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  creator         User             @relation(fields: [createdBy], references: [id])
+  formSubmissions FormSubmission[]
+  markers         Marker[]
+
+  @@map("collections")
+}
+
+// Teams
+model Team {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members      User[]
+  workOrders   WorkOrder[]
+
+  @@map("teams")
+}
+
+// Work Orders
+model WorkOrder {
+  id               String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orgId            String          @map("org_id") @db.Uuid
+  title            String          @db.VarChar(255)
+  description      String?         @db.Text
+  status           WorkOrderStatus @default(PENDING)
+  priority         Priority        @default(MEDIUM)
+  assignedToTeamId String?         @map("assigned_to_team_id") @db.Uuid
+  claimedById      String?         @map("claimed_by_id") @db.Uuid
+  workflowId       String          @map("workflow_id") @db.Uuid
+  currentStepIndex Int             @default(0) @map("current_step_index")
+  dueDate          DateTime?       @map("due_date")
+  completedAt      DateTime?       @map("completed_at")
+  createdById      String          @map("created_by_id") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  organization    Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assignedToTeam  Team?            @relation(fields: [assignedToTeamId], references: [id])
+  claimedBy       User?            @relation("ClaimedWorkOrders", fields: [claimedById], references: [id])
+  workflow        Workflow         @relation(fields: [workflowId], references: [id])
+  createdBy       User             @relation("CreatedWorkOrders", fields: [createdById], references: [id])
+  steps           WorkOrderStep[]
+  submissions     FormSubmission[]
+
+  @@index([orgId, status])
+  @@index([assignedToTeamId, status])
+  @@index([claimedById])
+  @@map("work_orders")
+}
+
+// Work Order Steps
+model WorkOrderStep {
+  id               String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workOrderId      String         @map("work_order_id") @db.Uuid
+  stepIndex        Int            @map("step_index")
+  stepDefinitionId String         @map("step_definition_id") @db.VarChar(255)
+  stepName         String?        @map("step_name") @db.VarChar(255)
+  assignedToUserId String?        @map("assigned_to_user_id") @db.Uuid
+  status           StepStatus     @default(PENDING)
+  data             Json           @default("{}")
+  startedAt        DateTime?      @map("started_at")
+  completedAt      DateTime?      @map("completed_at")
+  completedById    String?        @map("completed_by_id") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  workOrder    WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  assignedTo   User?            @relation("AssignedSteps", fields: [assignedToUserId], references: [id])
+  completedBy  User?            @relation("CompletedSteps", fields: [completedById], references: [id])
+  submissions  FormSubmission[]
+
+  @@unique([workOrderId, stepIndex])
+  @@index([assignedToUserId, status])
+  @@map("work_order_steps")
+}
+
+// Form Submissions
+model FormSubmission {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  formTemplateId   String    @map("form_template_id") @db.Uuid
+  workflowStepId   String?   @map("workflow_step_id") @db.Uuid
+  workOrderId      String?   @map("work_order_id") @db.Uuid
+  workOrderStepId  String?   @map("work_order_step_id") @db.Uuid
+  entityId         String?   @map("entity_id") @db.Uuid
+  collectionId     String?   @map("collection_id") @db.Uuid
+  data             Json
+  computedData     Json      @default("{}") @map("computed_data")
+  validationStatus Json      @default("{}") @map("validation_status")
+  attachmentsJson  Json      @default("[]") @map("attachments")
+  location         String?   @db.VarChar // Stored as WKT
+  deviceInfo       Json      @default("{}") @map("device_info")
+  offlineUuid      String?   @unique @map("offline_uuid") @db.VarChar(255)
+  version          Int       @default(1)
+  submittedBy      String    @map("submitted_by") @db.Uuid
+  submittedAt      DateTime  @default(now()) @map("submitted_at")
+  syncedAt         DateTime? @map("synced_at")
+
+  formTemplate   FormTemplate          @relation(fields: [formTemplateId], references: [id])
+  workflowStep   WorkflowStepInstance? @relation(fields: [workflowStepId], references: [id])
+  workOrder      WorkOrder?            @relation(fields: [workOrderId], references: [id])
+  workOrderStep  WorkOrderStep?        @relation(fields: [workOrderStepId], references: [id])
+  entity         Entity?               @relation(fields: [entityId], references: [id])
+  collection     Collection?           @relation(fields: [collectionId], references: [id])
+  submitter      User                  @relation(fields: [submittedBy], references: [id])
+  attachments    Attachment[]
+
+  @@index([entityId])
+  @@index([workOrderId])
+  @@map("form_submissions")
+}
+
+// Markers (For location-based workflows)
+model Marker {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  collectionId String?  @map("collection_id") @db.Uuid
+  entityId     String?  @map("entity_id") @db.Uuid
+  location     String   @db.VarChar // Stored as WKT
+  markerType   String?  @map("marker_type") @db.VarChar(50)
+  properties   Json     @default("{}")
+  createdBy    String   @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  collection Collection? @relation(fields: [collectionId], references: [id])
+  entity     Entity?     @relation(fields: [entityId], references: [id])
+  creator    User        @relation(fields: [createdBy], references: [id])
+
+  @@map("markers")
+}
+
+// Rules Engine
+model Rule {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  triggerType String   @map("trigger_type") @db.VarChar(50)
+  conditions  Json
+  actions     Json
+  priority    Int      @default(0)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("rules")
+}
+
+// File Attachments
+model Attachment {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  submissionId  String   @map("submission_id") @db.Uuid
+  fileName      String   @map("file_name") @db.VarChar(255)
+  fileType      String?  @map("file_type") @db.VarChar(100)
+  fileSize      Int?     @map("file_size")
+  storagePath   String   @map("storage_path") @db.Text
+  thumbnailPath String?  @map("thumbnail_path") @db.Text
+  metadata      Json     @default("{}")
+  uploadedBy    String   @map("uploaded_by") @db.Uuid
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+
+  submission FormSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  uploader   User           @relation(fields: [uploadedBy], references: [id])
+
+  @@map("attachments")
+}
+
+// Offline Sync Queue
+model SyncQueue {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  deviceId    String    @map("device_id") @db.VarChar(255)
+  actionType  String    @map("action_type") @db.VarChar(50)
+  entityType  String    @map("entity_type") @db.VarChar(50)
+  entityId    String?   @map("entity_id") @db.VarChar(255)
+  payload     Json
+  retryCount  Int       @default(0) @map("retry_count")
+  status      String    @default("pending") @db.VarChar(50)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  processedAt DateTime? @map("processed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("sync_queue")
+}
+
