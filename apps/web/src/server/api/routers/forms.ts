@@ -159,23 +159,75 @@ export const formsRouter = createTRPCRouter({
         location: z.string().optional(),
         deviceInfo: z.record(z.any()).optional(),
         offlineUuid: z.string().optional(),
+        entitiesToCreate: z.array(z.object({
+          fieldId: z.string(),
+          entityType: z.string(),
+          name: z.string(),
+          geometry: z.string().optional(),
+          metadata: z.record(z.any()).optional(),
+          tags: z.array(z.string()).optional(),
+        })).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.db.formSubmission.create({
-        data: {
-          formTemplateId: input.formTemplateId,
-          entityId: input.entityId,
-          workflowStepId: input.workflowStepId,
-          workOrderId: input.workOrderId,
-          workOrderStepId: input.workOrderStepId,
-          collectionId: input.collectionId,
-          data: input.data,
-          location: input.location,
-          deviceInfo: input.deviceInfo || {},
-          offlineUuid: input.offlineUuid,
-          submittedBy: ctx.session.user.id,
-        },
+      return ctx.db.$transaction(async (tx) => {
+        // Step 1: Create form submission first (so we have an ID to link entities to)
+        const submission = await tx.formSubmission.create({
+          data: {
+            formTemplateId: input.formTemplateId,
+            entityId: input.entityId,
+            workflowStepId: input.workflowStepId,
+            workOrderId: input.workOrderId,
+            workOrderStepId: input.workOrderStepId,
+            collectionId: input.collectionId,
+            data: input.data,
+            location: input.location,
+            deviceInfo: input.deviceInfo || {},
+            offlineUuid: input.offlineUuid,
+            submittedBy: ctx.session.user.id,
+          },
+        });
+
+        // Step 2: Create entities and link them to the submission
+        const createdEntities: Record<string, string> = {};
+        
+        if (input.entitiesToCreate && input.entitiesToCreate.length > 0) {
+          for (const entityData of input.entitiesToCreate) {
+            const entity = await tx.entity.create({
+              data: {
+                orgId: ctx.session.user.orgId,
+                entityType: entityData.entityType,
+                name: entityData.name,
+                geometry: entityData.geometry,
+                metadata: {
+                  ...entityData.metadata,
+                  createdFromForm: true,
+                  createdByUser: ctx.session.user.id,
+                  createdByUserName: ctx.session.user.name,
+                  createdFromSubmission: submission.id,
+                },
+                tags: entityData.tags || ['field-created'],
+                createdBySubmissionId: submission.id,
+              },
+            });
+            createdEntities[entityData.fieldId] = entity.id;
+          }
+
+          // Step 3: Update submission data with created entity IDs
+          if (Object.keys(createdEntities).length > 0) {
+            const updatedData = { ...input.data };
+            Object.entries(createdEntities).forEach(([fieldId, entityId]) => {
+              updatedData[fieldId] = entityId;
+            });
+
+            await tx.formSubmission.update({
+              where: { id: submission.id },
+              data: { data: updatedData },
+            });
+          }
+        }
+
+        return submission;
       });
     }),
 

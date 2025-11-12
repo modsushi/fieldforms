@@ -64,6 +64,7 @@ export const formFieldSchema = z.object({
     'file',
     'location',
     'entity_selector',
+    'entity_creator',
     'form_selector',
     'barcode',
     'qrcode',

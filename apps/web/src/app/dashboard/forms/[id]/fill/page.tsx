@@ -7,6 +7,7 @@ import { Card, CardContent, Button } from '@fieldform/ui';
 import { ThemeToggle } from '@/components/theme-toggle';
 import Link from 'next/link';
 import { ArrowLeft, FileText, Send } from 'lucide-react';
+import { extractEntitiesToCreate, getAllFieldsRecursive } from '@/lib/forms/entity-extraction';
 
 export default function FillFormPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -17,6 +18,11 @@ export default function FillFormPage({ params }: { params: { id: string } }) {
 
   const handleSubmit = async (data: any) => {
     try {
+      // Extract entity creation data from the form
+      const sections = template?.sections || (template?.schema as any)?.sections || [];
+      const allFields = getAllFieldsRecursive(sections);
+      const entitiesToCreate = extractEntitiesToCreate(data, allFields);
+
       await submitMutation.mutateAsync({
         formTemplateId: id,
         data,
@@ -27,6 +33,7 @@ export default function FillFormPage({ params }: { params: { id: string } }) {
           osVersion: navigator.userAgent,
           appVersion: '1.0.0',
         },
+        entitiesToCreate: entitiesToCreate.length > 0 ? entitiesToCreate : undefined,
       });
       
       alert('Form submitted successfully!');

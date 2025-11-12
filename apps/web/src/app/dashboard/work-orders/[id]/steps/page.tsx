@@ -32,10 +32,7 @@ export default function WorkOrderStepsPage({ params }: { params: { id: string } 
   const [selectedUserId, setSelectedUserId] = useState<string>('');
 
   const { data: stepsData, refetch } = trpc.workOrders.getSteps.useQuery({ workOrderId: id });
-  const { data: users } = trpc.teams.getMembers.useQuery(
-    { teamId: stepsData?.workOrder.assignedToTeamId || '' },
-    { enabled: !!stepsData?.workOrder.assignedToTeamId }
-  );
+  const { data: users } = trpc.teams.getAllUsers.useQuery();
 
   const assignStepMutation = trpc.workOrders.assignStep.useMutation();
   const unassignStepMutation = trpc.workOrders.unassignStep.useMutation();

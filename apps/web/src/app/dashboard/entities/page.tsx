@@ -1,44 +1,84 @@
 'use client';
 
 import { trpc } from '@/trpc/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@fieldform/ui';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@fieldform/ui';
 import Link from 'next/link';
 import { useState, useMemo } from 'react';
 import { Button } from '@fieldform/ui';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Database, Plus, ArrowLeft, MapPin, Package, Wrench, Pencil, Trash2, Search, Filter } from 'lucide-react';
+import {
+  Database,
+  Plus,
+  ArrowLeft,
+  MapPin,
+  Package,
+  Wrench,
+  Pencil,
+  Trash2,
+  Search,
+  Filter,
+  Map,
+  Grid3x3,
+} from 'lucide-react';
+import { EntityMapView } from '@/components/map/EntityMapView';
+import type { Entity } from '@fieldform/types';
+import { GeometryInput } from '@/components/entities/GeometryInput';
 
 export default function EntitiesPage() {
-  const { data: entitiesData, isLoading, error, isError, refetch } = trpc.entities.getAll.useQuery({});
+  const {
+    data: entitiesData,
+    isLoading,
+    error,
+    isError,
+    refetch,
+  } = trpc.entities.getAll.useQuery({});
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingEntity, setEditingEntity] = useState<any>(null);
   const [deletingEntity, setDeletingEntity] = useState<any>(null);
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [showFieldCreated, setShowFieldCreated] = useState<
+    'all' | 'field-created' | 'standard'
+  >('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
 
   const entities = entitiesData?.items || [];
 
   // Get unique entity types
   const entityTypes = useMemo(() => {
     if (!entities) return [];
-    const types = entities.map(e => e.entityType);
+    const types = entities.map((e) => e.entityType);
     return ['all', ...Array.from(new Set(types))];
   }, [entities]);
 
-  // Filter entities based on search and type
+  // Filter entities based on search, type, and field-created status
   const filteredEntities = useMemo(() => {
     if (!entities) return [];
 
-    return entities.filter(entity => {
-      const matchesSearch = searchText === '' ||
-        entity.name.toLowerCase().includes(searchText.toLowerCase()) ||
+    return entities.filter((entity) => {
+      const matchesSearch =
+        searchText === '' ||
+        entity.name?.toLowerCase().includes(searchText.toLowerCase()) ||
         (entity.code?.toLowerCase() || '').includes(searchText.toLowerCase());
 
-      const matchesType = typeFilter === 'all' || entity.entityType === typeFilter;
+      const matchesType =
+        typeFilter === 'all' || entity.entityType === typeFilter;
 
-      return matchesSearch && matchesType;
+      const isFieldCreated = entity.tags?.includes('field-created');
+      const matchesFieldCreatedFilter =
+        showFieldCreated === 'all' ||
+        (showFieldCreated === 'field-created' && isFieldCreated) ||
+        (showFieldCreated === 'standard' && !isFieldCreated);
+
+      return matchesSearch && matchesType && matchesFieldCreatedFilter;
     });
-  }, [entities, searchText, typeFilter]);
+  }, [entities, searchText, typeFilter, showFieldCreated]);
 
   if (isLoading) {
     return (
@@ -135,9 +175,12 @@ export default function EntitiesPage() {
               <div className="p-4 rounded-full bg-destructive/10 mb-4">
                 <Database className="h-12 w-12 text-destructive" />
               </div>
-              <p className="text-lg font-semibold text-destructive mb-2">Failed to load entities</p>
+              <p className="text-lg font-semibold text-destructive mb-2">
+                Failed to load entities
+              </p>
               <p className="text-sm text-muted-foreground mb-6 text-center">
-                {error?.message || 'Unable to fetch entities. Please try again.'}
+                {error?.message ||
+                  'Unable to fetch entities. Please try again.'}
               </p>
               <Button onClick={() => refetch()} className="gap-2">
                 <Search className="h-4 w-4" />
@@ -179,6 +222,32 @@ export default function EntitiesPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
+              {/* View Mode Toggle */}
+              <div className="flex border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background hover:bg-accent'
+                  }`}
+                  title="Grid View"
+                >
+                  <Grid3x3 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                    viewMode === 'map'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background hover:bg-accent'
+                  }`}
+                  title="Map View"
+                >
+                  <Map className="h-4 w-4" />
+                </button>
+              </div>
+
               <Link href="/dashboard">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <ArrowLeft className="h-4 w-4" />
@@ -206,7 +275,9 @@ export default function EntitiesPage() {
                 </div>
                 <div>
                   <CardTitle className="text-xl">Create New Entity</CardTitle>
-                  <CardDescription className="mt-1">Add a new site, asset, or equipment</CardDescription>
+                  <CardDescription className="mt-1">
+                    Add a new site, asset, or equipment
+                  </CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -233,18 +304,37 @@ export default function EntitiesPage() {
               </div>
 
               {/* Type Filter */}
-              <div className="relative sm:w-64">
+              <div className="relative sm:w-48">
                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <select
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all appearance-none cursor-pointer"
                 >
-                  {entityTypes.map(type => (
+                  {entityTypes.map((type) => (
                     <option key={type} value={type}>
-                      {type === 'all' ? 'All Types' : type.charAt(0).toUpperCase() + type.slice(1)}
+                      {type === 'all'
+                        ? 'All Types'
+                        : type.charAt(0).toUpperCase() + type.slice(1)}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              {/* Field Created Filter */}
+              <div className="relative sm:w-52">
+                <select
+                  value={showFieldCreated}
+                  onChange={(e) =>
+                    setShowFieldCreated(
+                      e.target.value as 'all' | 'field-created' | 'standard'
+                    )
+                  }
+                  className="w-full px-4 py-2.5 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all appearance-none cursor-pointer"
+                >
+                  <option value="all">All Sources</option>
+                  <option value="field-created">Field Created</option>
+                  <option value="standard">Standard</option>
                 </select>
               </div>
             </div>
@@ -252,29 +342,55 @@ export default function EntitiesPage() {
             {/* Results Info */}
             <div className="mb-6">
               <p className="text-sm text-muted-foreground">
-                Showing {filteredEntities.length} of {entities.length} entit{entities.length !== 1 ? 'ies' : 'y'}
-                {searchText && <span> matching "{searchText}"</span>}
+                Showing {filteredEntities.length} of {entities.length} entit
+                {entities.length !== 1 ? 'ies' : 'y'}
+                {searchText && (
+                  <span> matching &ldquo;{searchText}&rdquo;</span>
+                )}
                 {typeFilter !== 'all' && <span> of type {typeFilter}</span>}
               </p>
             </div>
           </>
         )}
 
-        {filteredEntities && filteredEntities.length > 0 ? (
+        {/* Map View */}
+        {viewMode === 'map' && (
+          <EntityMapView
+            entities={filteredEntities as any[]}
+            isLoading={isLoading}
+            height="calc(100vh - 300px)"
+            showFilters={false}
+            enableClustering={true}
+            onEntityClick={(entity) => setEditingEntity(entity)}
+          />
+        )}
+
+        {/* Grid View */}
+        {viewMode === 'grid' &&
+        filteredEntities &&
+        filteredEntities.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredEntities.map((entity: any) => {
               const Icon = getEntityIcon(entity.entityType);
+              const isFieldCreated = entity.tags?.includes('field-created');
               return (
-                <Card 
-                  key={entity.id} 
+                <Card
+                  key={entity.id}
                   className="hover:shadow-lg hover:scale-[1.02] transition-all border hover:border-primary/50 bg-card/50 backdrop-blur-sm group"
                 >
                   <CardHeader className="pb-6">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <CardTitle className="text-xl group-hover:text-primary transition-colors">
-                          {entity.name}
-                        </CardTitle>
+                        <div className="flex items-center gap-2 mb-2">
+                          <CardTitle className="text-xl group-hover:text-primary transition-colors">
+                            {entity.name}
+                          </CardTitle>
+                          {isFieldCreated && (
+                            <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800 border border-green-200">
+                              📍 Field
+                            </span>
+                          )}
+                        </div>
                         <CardDescription className="mt-3">
                           <span className="inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg bg-muted/50 font-medium">
                             <Icon className="h-3.5 w-3.5" />
@@ -288,17 +404,32 @@ export default function EntitiesPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    {entity.properties && Object.keys(entity.properties as Record<string, any>).length > 0 ? (
+                    {entity.properties &&
+                    Object.keys(entity.properties as Record<string, any>)
+                      .length > 0 ? (
                       <div className="text-sm space-y-2.5">
-                        {Object.entries(entity.properties as Record<string, any>).slice(0, 3).map(([key, value]) => (
-                          <div key={key} className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-                            <span className="font-medium text-muted-foreground">{key}:</span>
-                            <span className="text-foreground truncate ml-2">{String(value)}</span>
-                          </div>
-                        ))}
+                        {Object.entries(
+                          entity.properties as Record<string, any>
+                        )
+                          .slice(0, 3)
+                          .map(([key, value]) => (
+                            <div
+                              key={key}
+                              className="flex justify-between items-center p-3 rounded-lg bg-muted/30"
+                            >
+                              <span className="font-medium text-muted-foreground">
+                                {key}:
+                              </span>
+                              <span className="text-foreground truncate ml-2">
+                                {String(value)}
+                              </span>
+                            </div>
+                          ))}
                       </div>
                     ) : (
-                      <div className="text-sm text-muted-foreground italic">No properties set</div>
+                      <div className="text-sm text-muted-foreground italic">
+                        No properties set
+                      </div>
                     )}
                     {entity.parentId && (
                       <div className="mt-3 pt-3 border-t text-xs text-muted-foreground flex items-center gap-1">
@@ -333,13 +464,15 @@ export default function EntitiesPage() {
               );
             })}
           </div>
-        ) : entities && entities.length > 0 ? (
+        ) : viewMode === 'grid' && entities && entities.length > 0 ? (
           <Card className="border bg-card/50 backdrop-blur-sm">
             <CardContent className="flex flex-col items-center justify-center py-20">
               <div className="p-5 rounded-2xl bg-muted/30 mb-6">
                 <Search className="h-16 w-16 text-muted-foreground/30" />
               </div>
-              <p className="text-muted-foreground mb-4 text-lg">No entities match your search</p>
+              <p className="text-muted-foreground mb-4 text-lg">
+                No entities match your search
+              </p>
               <p className="text-sm text-muted-foreground mb-6">
                 Try adjusting your search or filter criteria
               </p>
@@ -354,20 +487,22 @@ export default function EntitiesPage() {
               </Button>
             </CardContent>
           </Card>
-        ) : (
+        ) : viewMode === 'grid' ? (
           <Card className="border bg-card/50 backdrop-blur-sm">
             <CardContent className="flex flex-col items-center justify-center py-20">
               <div className="p-5 rounded-2xl bg-muted/30 mb-6">
                 <Database className="h-16 w-16 text-muted-foreground/30" />
               </div>
-              <p className="text-muted-foreground mb-8 text-lg">No entities yet</p>
+              <p className="text-muted-foreground mb-8 text-lg">
+                No entities yet
+              </p>
               <Button onClick={() => setShowCreateForm(true)} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Create your first entity
               </Button>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         {/* Edit Entity Dialog */}
         {editingEntity && (
@@ -398,7 +533,8 @@ export default function EntitiesPage() {
               <CardHeader>
                 <CardTitle>Delete Entity</CardTitle>
                 <CardDescription>
-                  Are you sure you want to delete "{deletingEntity.name}"? This action cannot be undone.
+                  Are you sure you want to delete &ldquo;{deletingEntity.name}
+                  &rdquo;? This action cannot be undone.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -423,6 +559,7 @@ function CreateEntityForm({ onClose }: { onClose: () => void }) {
   const [formData, setFormData] = useState({
     name: '',
     entityType: 'site',
+    geometry: null as string | null,
     properties: {},
   });
 
@@ -442,6 +579,7 @@ function CreateEntityForm({ onClose }: { onClose: () => void }) {
     createEntity.mutate({
       name: formData.name,
       entityType: formData.entityType,
+      geometry: formData.geometry || undefined,
     });
   };
 
@@ -463,7 +601,9 @@ function CreateEntityForm({ onClose }: { onClose: () => void }) {
         <label className="block text-sm font-medium">Type</label>
         <select
           value={formData.entityType}
-          onChange={(e) => setFormData({ ...formData, entityType: e.target.value })}
+          onChange={(e) =>
+            setFormData({ ...formData, entityType: e.target.value })
+          }
           className="w-full px-4 py-2.5 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
         >
           <option value="site">🗺️ Site</option>
@@ -474,11 +614,23 @@ function CreateEntityForm({ onClose }: { onClose: () => void }) {
         </select>
       </div>
 
+      <GeometryInput
+        value={formData.geometry}
+        onChange={(geometry) => setFormData({ ...formData, geometry })}
+        label="Location"
+        helperText="Set the location for this entity (optional)"
+        required={false}
+      />
+
       <div className="flex gap-3 justify-end pt-4 border-t">
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={createEntity.isLoading} className="gap-2">
+        <Button
+          type="submit"
+          disabled={createEntity.isLoading}
+          className="gap-2"
+        >
           {createEntity.isLoading ? (
             <>Creating...</>
           ) : (
@@ -505,6 +657,7 @@ function EditEntityForm({
   const [formData, setFormData] = useState({
     name: entity.name || '',
     code: entity.code || '',
+    geometry: entity.geometry || null,
   });
 
   const updateEntity = trpc.entities.update.useMutation({
@@ -522,6 +675,7 @@ function EditEntityForm({
       id: entity.id,
       name: formData.name,
       code: formData.code || undefined,
+      geometry: formData.geometry || undefined,
     });
   };
 
@@ -548,21 +702,37 @@ function EditEntityForm({
           className="w-full px-4 py-2.5 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
           placeholder="QR/Barcode identifier"
         />
-        <p className="text-xs text-muted-foreground">Used for QR code or barcode scanning</p>
+        <p className="text-xs text-muted-foreground">
+          Used for QR code or barcode scanning
+        </p>
       </div>
+
+      <GeometryInput
+        value={formData.geometry}
+        onChange={(geometry) => setFormData({ ...formData, geometry })}
+        label="Location"
+        helperText="Update the location for this entity (optional)"
+        required={false}
+      />
 
       <div className="bg-muted/50 p-3 rounded-lg">
         <p className="text-sm text-muted-foreground">
           <strong>Type:</strong> {entity.entityType}
         </p>
-        <p className="text-xs text-muted-foreground mt-1">Entity type cannot be changed after creation</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Entity type cannot be changed after creation
+        </p>
       </div>
 
       <div className="flex gap-3 justify-end pt-4 border-t">
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={updateEntity.isLoading} className="gap-2">
+        <Button
+          type="submit"
+          disabled={updateEntity.isLoading}
+          className="gap-2"
+        >
           {updateEntity.isLoading ? (
             <>Saving...</>
           ) : (
@@ -603,8 +773,8 @@ function DeleteEntityConfirm({
     <div className="space-y-6">
       <div className="bg-destructive/10 p-4 rounded-lg">
         <p className="text-sm">
-          This will mark the entity as inactive. All related data will be preserved but the entity
-          will no longer appear in listings.
+          This will mark the entity as inactive. All related data will be
+          preserved but the entity will no longer appear in listings.
         </p>
       </div>
 
@@ -631,4 +801,3 @@ function DeleteEntityConfirm({
     </div>
   );
 }
-

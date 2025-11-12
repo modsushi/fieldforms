@@ -20,6 +20,7 @@ export const entitySchema = z.object({
   geometry: geoPointSchema.optional(),
   tags: z.array(z.string()).default([]),
   isActive: z.boolean().default(true),
+  createdBySubmissionId: z.string().uuid().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

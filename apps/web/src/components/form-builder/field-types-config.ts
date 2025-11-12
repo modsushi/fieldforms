@@ -146,5 +146,50 @@ export const FIELD_TYPES: FieldTypeConfig[] = [
       required: false,
     },
   },
+  {
+    type: 'entity_selector',
+    label: 'Entity Selector',
+    icon: '🏢',
+    description: 'Select an entity (site, asset, equipment)',
+    defaultConfig: {
+      type: 'entity_selector',
+      label: 'Select Entity',
+      required: false,
+      options: {
+        source: 'entity',
+        value: {
+          entityType: null, // null = all types
+          tags: [], // optional filter by tags
+        },
+      },
+    },
+  },
+  {
+    type: 'entity_creator',
+    label: 'Entity Creator',
+    icon: '📍',
+    description: 'Create new entity from field data',
+    defaultConfig: {
+      type: 'entity_creator',
+      label: 'Create New Entity',
+      required: false,
+      options: {
+        source: 'entity',
+        value: {
+          entityType: 'site',
+          mode: 'minimal', // 'minimal' or 'mapped'
+          minimalConfig: {
+            nameField: null, // Reference to form field for name, or null for manual input
+            captureLocation: true,
+          },
+          mappedFields: {
+            // Example: { 'form_field_id': 'entity_property_name' }
+            // Special keys: '__name__', '__geometry__', '__code__'
+          },
+          autoTags: ['field-created'],
+        },
+      },
+    },
+  },
 ];
 

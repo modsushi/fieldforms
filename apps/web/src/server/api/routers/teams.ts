@@ -232,5 +232,29 @@ export const teamRouter = createTRPCRouter({
 
       return team.members;
     }),
+
+  // Get all users in organization (for step assignment)
+  getAllUsers: supervisorProcedure.query(async ({ ctx }) => {
+    const userOrg = (ctx.session.user as any).orgId;
+
+    return ctx.db.user.findMany({
+      where: {
+        orgId: userOrg,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        teamId: true,
+        team: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }),
 });
 

@@ -94,29 +94,32 @@ model User {
 
 // Entities (polymorphic - can represent any field object)
 model Entity {
-  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  orgId      String    @map("org_id") @db.Uuid
-  entityType String    @map("entity_type") @db.VarChar(50)
-  parentId   String?   @map("parent_id") @db.Uuid
-  name       String?   @db.VarChar(255)
-  code       String?   @db.VarChar(100) // For QR/barcode scanning
-  metadata   Json      @default("{}")
-  geometry   String?   @db.VarChar // Stored as WKT (Well-Known Text)
-  tags       String[]  @default([])
-  isActive   Boolean   @default(true) @map("is_active")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
+  id                    String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orgId                 String    @map("org_id") @db.Uuid
+  entityType            String    @map("entity_type") @db.VarChar(50)
+  parentId              String?   @map("parent_id") @db.Uuid
+  name                  String?   @db.VarChar(255)
+  code                  String?   @db.VarChar(100) // For QR/barcode scanning
+  metadata              Json      @default("{}")
+  geometry              String?   @db.VarChar // Stored as WKT (Well-Known Text)
+  tags                  String[]  @default([])
+  isActive              Boolean   @default(true) @map("is_active")
+  createdBySubmissionId String?   @map("created_by_submission_id") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   organization           Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
   parent                 Entity?                @relation("EntityHierarchy", fields: [parentId], references: [id])
   children               Entity[]               @relation("EntityHierarchy")
-  formSubmissions        FormSubmission[]
+  formSubmissions        FormSubmission[]       @relation("EntitySubmissions")
+  createdBySubmission    FormSubmission?        @relation("CreatedEntity", fields: [createdBySubmissionId], references: [id], onDelete: SetNull)
   markers                Marker[]
   relationshipsAsSource  EntityRelationship[]   @relation("SourceEntity")
   relationshipsAsTarget  EntityRelationship[]   @relation("TargetEntity")
 
   @@index([orgId, entityType])
   @@index([tags])
+  @@index([createdBySubmissionId])
   @@map("entities")
 }
 
@@ -354,14 +357,15 @@ model FormSubmission {
   submittedAt      DateTime  @default(now()) @map("submitted_at")
   syncedAt         DateTime? @map("synced_at")
 
-  formTemplate   FormTemplate          @relation(fields: [formTemplateId], references: [id])
-  workflowStep   WorkflowStepInstance? @relation(fields: [workflowStepId], references: [id])
-  workOrder      WorkOrder?            @relation(fields: [workOrderId], references: [id])
-  workOrderStep  WorkOrderStep?        @relation(fields: [workOrderStepId], references: [id])
-  entity         Entity?               @relation(fields: [entityId], references: [id])
-  collection     Collection?           @relation(fields: [collectionId], references: [id])
-  submitter      User                  @relation(fields: [submittedBy], references: [id])
-  attachments    Attachment[]
+  formTemplate    FormTemplate          @relation(fields: [formTemplateId], references: [id])
+  workflowStep    WorkflowStepInstance? @relation(fields: [workflowStepId], references: [id])
+  workOrder       WorkOrder?            @relation(fields: [workOrderId], references: [id])
+  workOrderStep   WorkOrderStep?        @relation(fields: [workOrderStepId], references: [id])
+  entity          Entity?               @relation("EntitySubmissions", fields: [entityId], references: [id])
+  createdEntities Entity[]              @relation("CreatedEntity")
+  collection      Collection?           @relation(fields: [collectionId], references: [id])
+  submitter       User                  @relation(fields: [submittedBy], references: [id])
+  attachments     Attachment[]
 
   @@index([entityId])
   @@index([workOrderId])

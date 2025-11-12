@@ -2,10 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { trpc } from '@/trpc/client';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@fieldform/ui';
 import { FormStepComponent } from '@/components/workflow/steps/form-step';
 import { isFormStep } from '@fieldform/types';
+import { AlertCircle, User } from 'lucide-react';
+import { extractEntitiesToCreate, getAllFieldsRecursive } from '@/lib/forms/entity-extraction';
 
 const statusColors = {
   PENDING: 'bg-yellow-100 text-yellow-800',
@@ -18,11 +21,20 @@ export default function OperatorWorkOrderPage({ params }: { params: { id: string
   const { id } = params;
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const { data: session } = useSession();
+  const userId = session?.user?.id;
 
   const { data: workOrder, refetch: refetchWorkOrder } = trpc.workOrders.getById.useQuery({ id });
   const { data: progressData, refetch: refetchProgress } = trpc.workOrders.getProgress.useQuery({ workOrderId: id });
   const submitFormMutation = trpc.forms.submitForm.useMutation();
   const completeStepMutation = trpc.workOrders.completeStep.useMutation();
+
+  // Get form template for entity extraction
+  const formTemplateId = (progressData?.currentStep as any)?.config?.formTemplateId;
+  const { data: formTemplate } = trpc.forms.getTemplate.useQuery(
+    { id: formTemplateId },
+    { enabled: !!formTemplateId }
+  );
 
   const handleStepComplete = async (data: any) => {
     if (!workOrder || !progressData) return;
@@ -32,6 +44,14 @@ export default function OperatorWorkOrderPage({ params }: { params: { id: string
 
     setSubmitting(true);
     try {
+      // Extract entity creation data from the form
+      let entitiesToCreate: any[] = [];
+      if (formTemplate) {
+        const sections = formTemplate.sections || (formTemplate.schema as any)?.sections || [];
+        const allFields = getAllFieldsRecursive(sections);
+        entitiesToCreate = extractEntitiesToCreate(data, allFields);
+      }
+
       // Submit the form
       const submission = await submitFormMutation.mutateAsync({
         formTemplateId: (progressData.currentStep as any).config.formTemplateId,
@@ -43,6 +63,7 @@ export default function OperatorWorkOrderPage({ params }: { params: { id: string
           osVersion: navigator.userAgent,
           appVersion: '1.0.0',
         },
+        entitiesToCreate: entitiesToCreate.length > 0 ? entitiesToCreate : undefined,
       });
 
       // Complete the step using the new endpoint
@@ -76,9 +97,16 @@ export default function OperatorWorkOrderPage({ params }: { params: { id: string
   }
 
   const currentStep = progressData.currentStep;
+  const currentStepRecord = progressData.currentStepRecord;
   const currentStepIndex = progressData.workOrder.currentStepIndex;
   const totalSteps = progressData.progress.totalSteps;
   const percentage = progressData.progress.percentage;
+
+  // Check if step is assigned to someone else
+  const isAssignedToSomeoneElse = currentStepRecord?.assignedTo && 
+    currentStepRecord.assignedTo.id !== userId;
+  const isAssignedToMe = currentStepRecord?.assignedTo && 
+    currentStepRecord.assignedTo.id === userId;
 
   if (!currentStep) {
     return (
@@ -137,6 +165,39 @@ export default function OperatorWorkOrderPage({ params }: { params: { id: string
       </div>
 
       <div className="container mx-auto px-4 py-8 max-w-3xl">
+        {/* Step Assignment Information */}
+        {currentStepRecord?.assignedTo && (
+          <Card className={`mb-6 ${isAssignedToSomeoneElse ? 'border-yellow-500 bg-yellow-50' : 'border-blue-500 bg-blue-50'}`}>
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                {isAssignedToSomeoneElse ? (
+                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                ) : (
+                  <User className="h-5 w-5 text-blue-600 mt-0.5" />
+                )}
+                <div className="flex-1">
+                  <h3 className={`font-semibold text-sm mb-1 ${isAssignedToSomeoneElse ? 'text-yellow-900' : 'text-blue-900'}`}>
+                    {isAssignedToSomeoneElse ? 'Step Assigned to Another User' : 'Step Assigned to You'}
+                  </h3>
+                  <div className="text-sm">
+                    <p className={isAssignedToSomeoneElse ? 'text-yellow-800' : 'text-blue-800'}>
+                      <span className="font-medium">{currentStepRecord.assignedTo.name || currentStepRecord.assignedTo.email}</span>
+                      {currentStepRecord.assignedTo.name && (
+                        <span className="text-xs ml-2">({currentStepRecord.assignedTo.email})</span>
+                      )}
+                    </p>
+                    {isAssignedToSomeoneElse && (
+                      <p className="text-yellow-700 mt-2">
+                        ⚠️ This step is assigned to another user. You may not be able to complete it unless you're a supervisor.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Step Title */}
         <Card className="mb-6">
           <CardHeader>
@@ -197,3 +258,4 @@ export default function OperatorWorkOrderPage({ params }: { params: { id: string
     </div>
   );
 }
+

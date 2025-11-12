@@ -29,6 +29,7 @@ export function FormRenderer({
     handleSubmit,
     formState: { errors },
     watch,
+    setValue,
   } = useForm({
     defaultValues: initialData,
   });
@@ -96,6 +97,7 @@ export function FormRenderer({
                     register={register}
                     errors={errors}
                     watch={watch}
+                    setValue={setValue}
                   />
                 );
               })}

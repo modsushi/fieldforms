@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { createTRPCRouter, protectedProcedure } from '../trpc';
+import {
+  findEntitiesWithinRadius,
+  findEntitiesWithinPolygon,
+  findEntitiesWithinBounds,
+  findNearestEntities,
+} from '@/lib/geo/spatial-queries';
 
 export const entitiesRouter = createTRPCRouter({
   // Get all entities for the user's organization
@@ -160,6 +166,126 @@ export const entitiesRouter = createTRPCRouter({
         where: { id: input.id },
         data: { isActive: false },
       });
+    }),
+
+  // Spatial Queries
+
+  // Find entities within a radius from a center point
+  withinRadius: protectedProcedure
+    .input(
+      z.object({
+        center: z.object({
+          lat: z.number(),
+          lng: z.number(),
+        }),
+        radiusKm: z.number().positive(),
+        entityType: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const sql = findEntitiesWithinRadius(
+        input.center,
+        input.radiusKm,
+        ctx.session.user.orgId
+      );
+
+      let entities: any[] = await ctx.db.$queryRaw(sql);
+
+      // Filter by entity type if provided
+      if (input.entityType) {
+        entities = entities.filter(e => e.entityType === input.entityType);
+      }
+
+      // Parse geometry strings back to GeoJSON if needed
+      entities = entities.map(e => ({
+        ...e,
+        distance: e.distance ? Math.round(e.distance) : null, // Round to nearest meter
+      }));
+
+      return entities;
+    }),
+
+  // Find entities within a polygon
+  withinPolygon: protectedProcedure
+    .input(
+      z.object({
+        polygon: z.array(
+          z.object({
+            lat: z.number(),
+            lng: z.number(),
+          })
+        ).min(3), // Polygon must have at least 3 points
+        entityType: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const sql = findEntitiesWithinPolygon(
+        input.polygon,
+        ctx.session.user.orgId
+      );
+
+      let entities: any[] = await ctx.db.$queryRaw(sql);
+
+      // Filter by entity type if provided
+      if (input.entityType) {
+        entities = entities.filter(e => e.entityType === input.entityType);
+      }
+
+      return entities;
+    }),
+
+  // Find entities within a bounding box
+  withinBounds: protectedProcedure
+    .input(
+      z.object({
+        minLng: z.number(),
+        minLat: z.number(),
+        maxLng: z.number(),
+        maxLat: z.number(),
+        entityType: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { entityType, ...bounds } = input;
+
+      const sql = findEntitiesWithinBounds(bounds, ctx.session.user.orgId);
+
+      let entities: any[] = await ctx.db.$queryRaw(sql);
+
+      // Filter by entity type if provided
+      if (entityType) {
+        entities = entities.filter(e => e.entityType === entityType);
+      }
+
+      return entities;
+    }),
+
+  // Find nearest entities to a point
+  nearest: protectedProcedure
+    .input(
+      z.object({
+        center: z.object({
+          lat: z.number(),
+          lng: z.number(),
+        }),
+        limit: z.number().positive().optional().default(5),
+        entityType: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const sql = findNearestEntities(
+        input.center,
+        ctx.session.user.orgId,
+        input.entityType,
+        input.limit
+      );
+
+      const entities: any[] = await ctx.db.$queryRaw(sql);
+
+      return entities.map(e => ({
+        ...e,
+        distance: e.distance ? Math.round(e.distance) : null,
+      }));
     }),
 });
 

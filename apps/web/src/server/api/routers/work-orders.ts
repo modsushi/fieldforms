@@ -38,10 +38,11 @@ export const workOrderRouter = createTRPCRouter({
           baseWhere.assignedToTeamId = input.teamId;
         }
       } else {
-        // Operators only see work assigned to their team or claimed by them
+        // Operators see work assigned to their team, claimed by them, or with steps assigned to them
         baseWhere.OR = [
           { claimedById: userId },
           ...(userTeamId ? [{ assignedToTeamId: userTeamId }] : []),
+          { steps: { some: { assignedToUserId: userId } } },
         ];
       }
 
@@ -359,6 +360,15 @@ export const workOrderRouter = createTRPCRouter({
         },
         include: {
           steps: {
+            include: {
+              assignedTo: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
             orderBy: { stepIndex: 'asc' },
           },
           workflow: true,

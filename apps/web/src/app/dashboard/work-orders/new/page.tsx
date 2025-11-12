@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { trpc } from '@/trpc/client';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@fieldform/ui';
 import { Priority } from '@prisma/client';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, Map } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function NewWorkOrderPage() {
@@ -64,6 +65,12 @@ export default function NewWorkOrderPage() {
               </p>
             </div>
             <div className="flex gap-2">
+              <Link href="/dashboard/work-orders/map">
+                <Button variant="outline" className="gap-2">
+                  <Map className="h-4 w-4" />
+                  Select from Map
+                </Button>
+              </Link>
               <ThemeToggle />
               <Button
                 variant="outline"
@@ -91,7 +98,7 @@ export default function NewWorkOrderPage() {
               {/* Title */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Title <span className="text-red-500">*</span>
+                  Title <span className="text-destructive">*</span>
                 </label>
                 <input
                   type="text"
@@ -99,7 +106,7 @@ export default function NewWorkOrderPage() {
                   value={formData.title}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-11 px-4 py-2.5 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="e.g., Site Inspection - Main Building"
                 />
               </div>
@@ -111,8 +118,8 @@ export default function NewWorkOrderPage() {
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
-                  rows={3}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={4}
+                  className="w-full px-4 py-2.5 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="Provide details about this work order..."
                 />
               </div>
@@ -120,14 +127,14 @@ export default function NewWorkOrderPage() {
               {/* Workflow */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Workflow Template <span className="text-red-500">*</span>
+                  Workflow Template <span className="text-destructive">*</span>
                 </label>
                 <select
                   name="workflowId"
                   value={formData.workflowId}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-11 px-4 py-2 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 >
                   <option value="">Select a workflow...</option>
                   {workflows?.map((workflow) => (
@@ -144,14 +151,14 @@ export default function NewWorkOrderPage() {
               {/* Priority */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Priority <span className="text-red-500">*</span>
+                  Priority <span className="text-destructive">*</span>
                 </label>
                 <select
                   name="priority"
                   value={formData.priority}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-11 px-4 py-2 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 >
                   <option value="LOW">Low</option>
                   <option value="MEDIUM">Medium</option>
@@ -167,7 +174,7 @@ export default function NewWorkOrderPage() {
                   name="assignedToTeamId"
                   value={formData.assignedToTeamId}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-11 px-4 py-2 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 >
                   <option value="">Unassigned</option>
                   {teams?.map((team) => (
@@ -189,24 +196,25 @@ export default function NewWorkOrderPage() {
                   name="dueDate"
                   value={formData.dueDate}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-11 px-4 py-2.5 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 />
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-4 pt-4 border-t">
                 <Button
                   type="submit"
                   disabled={createMutation.isPending}
-                  className="flex-1"
+                  className="flex-1 h-11 gap-2"
                 >
+                  <ClipboardList className="h-4 w-4" />
                   {createMutation.isPending ? 'Creating...' : 'Create Work Order'}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => router.push('/dashboard/work-orders')}
-                  className="flex-1"
+                  className="flex-1 h-11"
                 >
                   Cancel
                 </Button>
