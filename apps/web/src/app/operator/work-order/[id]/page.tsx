@@ -6,7 +6,8 @@ import { useSession } from 'next-auth/react';
 import { trpc } from '@/trpc/client';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@fieldform/ui';
 import { FormStepComponent } from '@/components/workflow/steps/form-step';
-import { isFormStep } from '@fieldform/types';
+import { ConditionalStepRenderer } from '@/components/workflow/steps/conditional-step-renderer';
+import { isFormStep, isConditionalStep } from '@fieldform/types';
 import { AlertCircle, User } from 'lucide-react';
 import { extractEntitiesToCreate, getAllFieldsRecursive } from '@/lib/forms/entity-extraction';
 
@@ -87,6 +88,42 @@ export default function OperatorWorkOrderPage({ params }: { params: { id: string
     } catch (error: any) {
       console.error('Failed to complete step:', error);
       alert(error.message || 'Failed to complete step. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleConditionalStepComplete = async (data: { branchIndex: number; branchTaken: 'default' | number }) => {
+    if (!workOrder || !progressData) return;
+
+    const currentStepIndex = progressData.workOrder.currentStepIndex;
+    const totalSteps = progressData.progress.totalSteps;
+
+    setSubmitting(true);
+    try {
+      // Complete the conditional step (no submission needed, just metadata)
+      await completeStepMutation.mutateAsync({
+        workOrderId: id,
+        stepIndex: currentStepIndex,
+        metadata: {
+          branchIndex: data.branchIndex,
+          branchTaken: data.branchTaken,
+          evaluatedAt: new Date().toISOString(),
+        },
+      });
+
+      // Refetch to get updated progress
+      await refetchWorkOrder();
+      await refetchProgress();
+
+      // Check if workflow is complete
+      if (currentStepIndex >= totalSteps - 1) {
+        alert('Work order completed!');
+        router.push('/operator');
+      }
+    } catch (error: any) {
+      console.error('Failed to complete conditional step:', error);
+      alert(error.message || 'Failed to process conditional step. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -220,6 +257,14 @@ export default function OperatorWorkOrderPage({ params }: { params: { id: string
             stepIndex={currentStepIndex}
             onComplete={handleStepComplete}
             isSubmitting={submitting}
+          />
+        ) : isConditionalStep(currentStep) ? (
+          <ConditionalStepRenderer
+            step={currentStep}
+            workOrderId={id}
+            stepIndex={currentStepIndex}
+            stepData={progressData.stepData || {}}
+            onComplete={handleConditionalStepComplete}
           />
         ) : (
           <Card>

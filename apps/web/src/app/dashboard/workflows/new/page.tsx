@@ -16,6 +16,8 @@ import {
 } from '@fieldform/ui';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { ConditionalStepEditor } from '@/components/workflow/conditional-step-editor';
+import { ConditionalStep } from '@fieldform/types';
 
 interface WorkflowStep {
   id: string;
@@ -57,6 +59,36 @@ export default function NewWorkflowPage() {
       config: {},
     };
     setSteps([...steps, newStep]);
+  };
+
+  const updateStepType = (index: number, newType: WorkflowStep['type']) => {
+    const newSteps = [...steps];
+    const step = newSteps[index];
+
+    // Initialize config based on type
+    let config: any = {};
+    if (newType === 'form') {
+      config = { formTemplateId: '' };
+    } else if (newType === 'conditional') {
+      config = {
+        sourceStepId: '',
+        fieldId: '',
+        branches: [],
+        defaultBranch: [],
+      };
+    } else if (newType === 'iterator') {
+      config = {
+        sourceType: 'entities',
+        steps: [],
+      };
+    } else if (newType === 'locationMarker') {
+      config = {
+        formTemplateId: '',
+      };
+    }
+
+    newSteps[index] = { ...step, type: newType, config };
+    setSteps(newSteps);
   };
 
   const removeStep = (index: number) => {
@@ -200,9 +232,7 @@ export default function NewWorkflowPage() {
                           <select
                             value={step.type}
                             onChange={(e) =>
-                              updateStep(index, {
-                                type: e.target.value as WorkflowStep['type'],
-                              })
+                              updateStepType(index, e.target.value as WorkflowStep['type'])
                             }
                             className="w-full h-9 px-3 text-sm border rounded-md bg-background"
                           >
@@ -222,6 +252,7 @@ export default function NewWorkflowPage() {
                           className="h-9 text-sm"
                         />
                       </div>
+                      {/* Form Step Config */}
                       {step.type === 'form' && formTemplates && (
                         <div>
                           <Label className="text-xs">Select Form Template</Label>
@@ -241,6 +272,36 @@ export default function NewWorkflowPage() {
                               </option>
                             ))}
                           </select>
+                        </div>
+                      )}
+
+                      {/* Conditional Step Config */}
+                      {step.type === 'conditional' && (
+                        <div className="mt-3">
+                          <ConditionalStepEditor
+                            step={step as ConditionalStep}
+                            allSteps={steps}
+                            currentStepIndex={index}
+                            onChange={(updates) => updateStep(index, updates)}
+                          />
+                        </div>
+                      )}
+
+                      {/* Iterator Step Placeholder */}
+                      {step.type === 'iterator' && (
+                        <div className="p-3 border rounded-md bg-blue-50 dark:bg-blue-950/20">
+                          <p className="text-xs text-muted-foreground">
+                            Iterator step configuration will be available in a future update.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Location Marker Step Placeholder */}
+                      {step.type === 'locationMarker' && (
+                        <div className="p-3 border rounded-md bg-blue-50 dark:bg-blue-950/20">
+                          <p className="text-xs text-muted-foreground">
+                            Location marker step configuration will be available in a future update.
+                          </p>
                         </div>
                       )}
                     </div>
