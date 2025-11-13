@@ -191,22 +191,32 @@ export function ConditionalStepRenderer({
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">Configured Branches:</p>
             <div className="space-y-1">
-              {step.config.branches.map((branch, index) => (
-                <div
-                  key={index}
-                  className={`p-2 text-xs rounded border ${
-                    result && result.branchIndex === index
-                      ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800'
-                      : 'bg-muted/30 border-border'
-                  }`}
-                >
-                  <span className="font-medium">Branch {index + 1}:</span>{' '}
-                  {branch.condition.operator} &quot;{branch.condition.value}&quot;
-                  {result && result.branchIndex === index && (
-                    <span className="ml-2 text-green-600 dark:text-green-400">✓ Selected</span>
-                  )}
-                </div>
-              ))}
+              {step.config.branches.map((branch, index) => {
+                // Format value display for different types
+                let displayValue = branch.condition.value;
+                if (typeof displayValue === 'boolean') {
+                  displayValue = displayValue ? 'Checked (Yes)' : 'Unchecked (No)';
+                } else {
+                  displayValue = String(displayValue || '');
+                }
+
+                return (
+                  <div
+                    key={index}
+                    className={`p-2 text-xs rounded border ${
+                      result && result.branchIndex === index
+                        ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800'
+                        : 'bg-muted/30 border-border'
+                    }`}
+                  >
+                    <span className="font-medium">Branch {index + 1}:</span>{' '}
+                    {branch.condition.operator} &quot;{displayValue}&quot;
+                    {result && result.branchIndex === index && (
+                      <span className="ml-2 text-green-600 dark:text-green-400">✓ Selected</span>
+                    )}
+                  </div>
+                );
+              })}
               {step.config.defaultBranch && step.config.defaultBranch.length > 0 && (
                 <div
                   className={`p-2 text-xs rounded border ${

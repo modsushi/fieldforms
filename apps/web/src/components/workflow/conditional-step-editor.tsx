@@ -16,6 +16,79 @@ interface ConditionalStepEditorProps {
 
 type ConditionOperator = 'equals' | 'contains' | 'greater_than' | 'less_than' | 'in' | 'not_in';
 
+// Type-aware value input for branch conditions
+function BranchValueInput({
+  fieldType,
+  value,
+  onChange,
+}: {
+  fieldType: string;
+  value: any;
+  onChange: (value: any) => void;
+}) {
+  // Checkbox field - show boolean selector
+  if (fieldType === 'checkbox') {
+    return (
+      <select
+        value={value === true || value === 'true' ? 'true' : 'false'}
+        onChange={(e) => onChange(e.target.value === 'true')}
+        className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+      >
+        <option value="true">Checked (Yes)</option>
+        <option value="false">Unchecked (No)</option>
+      </select>
+    );
+  }
+
+  // Number field - show number input
+  if (fieldType === 'number') {
+    return (
+      <input
+        type="number"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : '')}
+        placeholder="Enter number"
+        className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+      />
+    );
+  }
+
+  // Date field - show date input
+  if (fieldType === 'date') {
+    return (
+      <input
+        type="date"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+      />
+    );
+  }
+
+  // DateTime field - show datetime input
+  if (fieldType === 'datetime') {
+    return (
+      <input
+        type="datetime-local"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+      />
+    );
+  }
+
+  // Default - show text input
+  return (
+    <input
+      type="text"
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="Enter value"
+      className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+    />
+  );
+}
+
 export function ConditionalStepEditor({
   step,
   allSteps,
@@ -254,6 +327,17 @@ export function ConditionalStepEditor({
                     </button>
                     <span className="text-sm font-medium flex-1">
                       Branch {index + 1}
+                      {!expandedBranches.has(index) && (
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                          {branch.condition.operator} &quot;
+                          {selectedField?.type === 'checkbox'
+                            ? branch.condition.value === true || branch.condition.value === 'true'
+                              ? 'Checked'
+                              : 'Unchecked'
+                            : String(branch.condition.value || '')}
+                          &quot;
+                        </span>
+                      )}
                     </span>
                     <Button
                       type="button"
@@ -292,14 +376,10 @@ export function ConditionalStepEditor({
                       </div>
                       <div>
                         <Label className="text-xs">Value</Label>
-                        <input
-                          type="text"
-                          value={branch.condition.value || ''}
-                          onChange={(e) =>
-                            updateBranchCondition(index, { value: e.target.value })
-                          }
-                          placeholder="Enter value"
-                          className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+                        <BranchValueInput
+                          fieldType={selectedField?.type || 'text'}
+                          value={branch.condition.value}
+                          onChange={(value) => updateBranchCondition(index, { value })}
                         />
                       </div>
                     </div>
