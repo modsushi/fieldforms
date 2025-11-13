@@ -31,33 +31,49 @@ export function ConditionalStepRenderer({
     setEvaluating(true);
 
     try {
+      console.log('[ConditionalStepRenderer] Evaluating condition');
+      console.log('[ConditionalStepRenderer] stepData:', stepData);
+      console.log('[ConditionalStepRenderer] sourceStepId:', step.config.sourceStepId);
+      console.log('[ConditionalStepRenderer] fieldId:', step.config.fieldId);
+      console.log('[ConditionalStepRenderer] branches:', step.config.branches);
+
       // Get the source step data
       const sourceData = stepData[step.config.sourceStepId];
 
       if (!sourceData) {
-        console.error('Source step data not found:', step.config.sourceStepId);
+        console.error('[ConditionalStepRenderer] Source step data not found:', step.config.sourceStepId);
+        console.error('[ConditionalStepRenderer] Available keys in stepData:', Object.keys(stepData));
         setEvaluating(false);
         return;
       }
 
       // Get the field value
       const fieldValue = sourceData[step.config.fieldId];
+      console.log('[ConditionalStepRenderer] fieldValue:', fieldValue);
 
       // Evaluate each branch condition
       let matchedBranch = -1;
       for (let i = 0; i < step.config.branches.length; i++) {
         const branch = step.config.branches[i];
+        console.log(`[ConditionalStepRenderer] Evaluating branch ${i}:`, {
+          operator: branch.condition.operator,
+          compareValue: branch.condition.value,
+          actualValue: fieldValue,
+        });
         const matched = evaluateSingleCondition(
           fieldValue,
           branch.condition.operator,
           branch.condition.value
         );
+        console.log(`[ConditionalStepRenderer] Branch ${i} matched:`, matched);
 
         if (matched) {
           matchedBranch = i;
           break;
         }
       }
+
+      console.log('[ConditionalStepRenderer] Final matched branch:', matchedBranch);
 
       // Determine result
       if (matchedBranch >= 0) {

@@ -415,21 +415,38 @@ export const workOrderRouter = createTRPCRouter({
 
       // Build stepData map from completed steps with form submissions
       const stepData: Record<string, any> = {};
+      console.log('[getProgress] Building stepData from completed steps');
+      console.log('[getProgress] Total steps:', workOrder.steps.length);
+      console.log('[getProgress] Completed steps:', workOrder.steps.filter(s => s.status === 'COMPLETED').length);
+
       workOrder.steps
         .filter(s => s.status === 'COMPLETED')
         .forEach(step => {
           const stepDef = workflowSteps[step.stepIndex];
+          console.log(`[getProgress] Processing step ${step.stepIndex}:`, {
+            stepDefId: stepDef?.id,
+            hasSubmissions: !!step.submissions,
+            submissionsCount: step.submissions?.length || 0,
+            hasData: !!step.data,
+          });
+
           if (stepDef) {
             // For form steps, use submission data
             if (step.submissions && step.submissions.length > 0) {
               const latestSubmission = step.submissions[step.submissions.length - 1];
+              console.log(`[getProgress] Using submission data for step ${stepDef.id}:`, latestSubmission.data);
               stepData[stepDef.id] = latestSubmission.data;
             } else if (step.data) {
               // For non-form steps (conditional, etc), use step.data
+              console.log(`[getProgress] Using step.data for step ${stepDef.id}:`, step.data);
               stepData[stepDef.id] = step.data;
+            } else {
+              console.warn(`[getProgress] No data found for step ${stepDef.id}`);
             }
           }
         });
+
+      console.log('[getProgress] Final stepData:', stepData);
 
       return {
         workOrder: {
