@@ -21,10 +21,12 @@ function BranchValueInput({
   fieldType,
   value,
   onChange,
+  fieldOptions,
 }: {
   fieldType: string;
   value: any;
   onChange: (value: any) => void;
+  fieldOptions?: Array<{ label: string; value: string }>;
 }) {
   // Checkbox field - show boolean selector
   if (fieldType === 'checkbox') {
@@ -38,6 +40,49 @@ function BranchValueInput({
         <option value="false">Unchecked (No)</option>
       </select>
     );
+  }
+
+  // Select/Radio with options - show dropdown with actual options
+  if ((fieldType === 'select' || fieldType === 'radio') && fieldOptions && fieldOptions.length > 0) {
+    return (
+      <select
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+      >
+        <option value="">Select value...</option>
+        {fieldOptions.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  // Multiselect - show as text for now (could be enhanced to multi-select)
+  if (fieldType === 'multiselect') {
+    if (fieldOptions && fieldOptions.length > 0) {
+      return (
+        <div className="space-y-1">
+          <select
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full h-8 px-2 text-xs border rounded-md bg-background"
+          >
+            <option value="">Select value...</option>
+            {fieldOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Hint: For "in" operator, you can enter comma-separated values
+          </p>
+        </div>
+      );
+    }
   }
 
   // Number field - show number input
@@ -77,6 +122,19 @@ function BranchValueInput({
     );
   }
 
+  // Textarea - show textarea
+  if (fieldType === 'textarea') {
+    return (
+      <textarea
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Enter text"
+        rows={2}
+        className="w-full px-2 py-1 text-xs border rounded-md bg-background"
+      />
+    );
+  }
+
   // Default - show text input
   return (
     <input
@@ -96,7 +154,12 @@ export function ConditionalStepEditor({
   onChange,
 }: ConditionalStepEditorProps) {
   const [expandedBranches, setExpandedBranches] = useState<Set<number>>(new Set([0]));
-  const [sourceFormFields, setSourceFormFields] = useState<Array<{ id: string; label: string; type: string }>>([]);
+  const [sourceFormFields, setSourceFormFields] = useState<Array<{
+    id: string;
+    label: string;
+    type: string;
+    options?: Array<{ label: string; value: string }>;
+  }>>([]);
 
   // Get form template data when source step changes
   const sourceStep = allSteps
@@ -114,7 +177,12 @@ export function ConditionalStepEditor({
   // Extract fields from template
   useEffect(() => {
     if (template) {
-      const fields: Array<{ id: string; label: string; type: string }> = [];
+      const fields: Array<{
+        id: string;
+        label: string;
+        type: string;
+        options?: Array<{ label: string; value: string }>;
+      }> = [];
 
       // Handle different template structures
       const sections = template.sections || (template as any).schema?.sections || [];
@@ -122,11 +190,33 @@ export function ConditionalStepEditor({
       sections.forEach((section: any) => {
         if (section.fields && Array.isArray(section.fields)) {
           section.fields.forEach((field: any) => {
-            fields.push({
+            const fieldData: {
+              id: string;
+              label: string;
+              type: string;
+              options?: Array<{ label: string; value: string }>;
+            } = {
               id: field.id,
               label: field.label,
               type: field.type,
-            });
+            };
+
+            // Extract options for select/radio/multiselect fields
+            if (field.options) {
+              if (field.options.source === 'static' && Array.isArray(field.options.value)) {
+                // Static options: convert to label/value format
+                fieldData.options = field.options.value.map((opt: any) => {
+                  if (typeof opt === 'string') {
+                    return { label: opt, value: opt };
+                  } else if (opt.label && opt.value) {
+                    return { label: opt.label, value: opt.value };
+                  }
+                  return { label: String(opt), value: String(opt) };
+                });
+              }
+            }
+
+            fields.push(fieldData);
           });
         }
       });
@@ -380,6 +470,7 @@ export function ConditionalStepEditor({
                           fieldType={selectedField?.type || 'text'}
                           value={branch.condition.value}
                           onChange={(value) => updateBranchCondition(index, { value })}
+                          fieldOptions={selectedField?.options}
                         />
                       </div>
                     </div>
