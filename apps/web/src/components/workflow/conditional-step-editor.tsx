@@ -41,15 +41,22 @@ export function ConditionalStepEditor({
   useEffect(() => {
     if (template) {
       const fields: Array<{ id: string; label: string; type: string }> = [];
-      template.sections.forEach(section => {
-        section.fields.forEach(field => {
-          fields.push({
-            id: field.id,
-            label: field.label,
-            type: field.type,
+
+      // Handle different template structures
+      const sections = template.sections || (template as any).schema?.sections || [];
+
+      sections.forEach((section: any) => {
+        if (section.fields && Array.isArray(section.fields)) {
+          section.fields.forEach((field: any) => {
+            fields.push({
+              id: field.id,
+              label: field.label,
+              type: field.type,
+            });
           });
-        });
+        }
       });
+
       setSourceFormFields(fields);
     } else {
       setSourceFormFields([]);
