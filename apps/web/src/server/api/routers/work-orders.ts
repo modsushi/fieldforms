@@ -823,6 +823,14 @@ export const workOrderRouter = createTRPCRouter({
         if (!submission) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Submission not found' });
         }
+
+        // Link the submission to this step if not already linked
+        if (!submission.workOrderStepId) {
+          await ctx.db.formSubmission.update({
+            where: { id: input.submissionId },
+            data: { workOrderStepId: step.id },
+          });
+        }
       }
 
       // Update step to completed (with metadata if provided)
