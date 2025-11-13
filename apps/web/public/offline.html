@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldForms - Offline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .icon {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 24px;
+            background: #f3f4f6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 16px;
+            color: #1f2937;
+        }
+        p {
+            font-size: 16px;
+            color: #6b7280;
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+        .status {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            color: #92400e;
+        }
+        .button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .button:hover {
+            background: #2563eb;
+        }
+        .features {
+            margin-top: 32px;
+            text-align: left;
+        }
+        .feature {
+            display: flex;
+            align-items: start;
+            margin-bottom: 16px;
+        }
+        .feature-icon {
+            color: #10b981;
+            margin-right: 12px;
+            font-size: 20px;
+        }
+        .feature-text {
+            font-size: 14px;
+            color: #4b5563;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">📱</div>
+        <h1>You're Offline</h1>
+        <p>It looks like you've lost your internet connection. Don't worry, FieldForms works offline!</p>
+
+        <div class="status">
+            <strong>Offline Mode Active</strong><br>
+            Your data is being saved locally and will sync when you're back online.
+        </div>
+
+        <button class="button" onclick="window.location.reload()">Try Again</button>
+
+        <div class="features">
+            <div class="feature">
+                <span class="feature-icon">✓</span>
+                <div class="feature-text">
+                    <strong>Forms saved locally</strong> - Continue working without interruption
+                </div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">✓</span>
+                <div class="feature-text">
+                    <strong>Auto-sync enabled</strong> - Data will upload when connection returns
+                </div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">✓</span>
+                <div class="feature-text">
+                    <strong>Photos captured</strong> - Images stored and ready to upload
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check if online and auto-reload
+        window.addEventListener('online', function() {
+            setTimeout(function() {
+                window.location.reload();
+            }, 1000);
+        });
+
+        // Display online status
+        function updateOnlineStatus() {
+            if (navigator.onLine) {
+                window.location.reload();
+            }
+        }
+
+        window.addEventListener('online', updateOnlineStatus);
+
+        // Check connection every 5 seconds
+        setInterval(function() {
+            if (navigator.onLine) {
+                window.location.reload();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

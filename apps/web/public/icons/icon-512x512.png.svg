@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#3b82f6"/>
+
+  <!-- Border -->
+  <rect x="25.6" y="25.6" width="460.8" height="460.8"
+        fill="none" stroke="#60a5fa" stroke-width="10.24" rx="51.2"/>
+
+  <!-- Icon: Clipboard with checkmark -->
+  <g transform="translate(153.6, 102.4)">
+    <!-- Clipboard -->
+    <rect x="0" y="25.6" width="204.8" height="256"
+          fill="none" stroke="#ffffff" stroke-width="10.24" rx="10.24"/>
+
+    <!-- Clip -->
+    <rect x="61.44" y="0" width="81.92" height="40.96"
+          fill="#ffffff" stroke="#60a5fa" stroke-width="5.12" rx="10.24"/>
+
+    <!-- Checkmark -->
+    <path d="M 40.96 128 L 81.92 179.2 L 163.84 92.16"
+          fill="none" stroke="#10b981" stroke-width="15.36" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Lines (form fields) -->
+    <line x1="30.72" y1="215.04" x2="174.08" y2="215.04"
+          stroke="#60a5fa" stroke-width="7.68" stroke-linecap="round"/>
+    <line x1="30.72" y1="245.76" x2="143.36" y2="245.76"
+          stroke="#60a5fa" stroke-width="7.68" stroke-linecap="round"/>
+  </g>
+
+  <!-- Text -->
+  <text x="256" y="450.56"
+        font-family="Arial, sans-serif"
+        font-size="61.44"
+        font-weight="bold"
+        fill="#ffffff"
+        text-anchor="middle">FF</text>
+</svg>

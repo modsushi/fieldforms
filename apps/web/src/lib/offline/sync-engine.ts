@@ -1,5 +1,6 @@
 import { offlineDb, SyncQueueItem, OfflineSubmission } from './db';
 import { offlineManager } from './manager';
+import { offlineFileStorage } from '../storage/offline-storage';
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000; // 1 second
@@ -79,6 +80,14 @@ export class SyncEngine {
       }
 
       console.log(`📤 Syncing ${pendingItems.length} items...`);
+
+      // Sync files first (since submissions might reference them)
+      try {
+        const fileResult = await offlineFileStorage.syncFiles();
+        console.log(`📁 File sync: ${fileResult.success} success, ${fileResult.failed} failed`);
+      } catch (error) {
+        console.error('❌ File sync error:', error);
+      }
 
       for (const item of pendingItems) {
         try {
