@@ -369,13 +369,9 @@ export const workOrderRouter = createTRPCRouter({
                 },
               },
               submissions: {
-                include: {
-                  formSubmission: {
-                    select: {
-                      id: true,
-                      data: true,
-                    },
-                  },
+                select: {
+                  id: true,
+                  data: true,
                 },
               },
             },
@@ -427,9 +423,7 @@ export const workOrderRouter = createTRPCRouter({
             // For form steps, use submission data
             if (step.submissions && step.submissions.length > 0) {
               const latestSubmission = step.submissions[step.submissions.length - 1];
-              if (latestSubmission.formSubmission) {
-                stepData[stepDef.id] = latestSubmission.formSubmission.data;
-              }
+              stepData[stepDef.id] = latestSubmission.data;
             } else if (step.data) {
               // For non-form steps (conditional, etc), use step.data
               stepData[stepDef.id] = step.data;
