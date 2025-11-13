@@ -5,6 +5,7 @@ import { Button, Label } from '@fieldform/ui';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { ConditionalStep, FormStep, WorkflowStep } from '@fieldform/types';
 import { trpc } from '@/trpc/client';
+import { BranchStepsEditor } from './branch-steps-editor';
 
 interface ConditionalStepEditorProps {
   step: ConditionalStep;
@@ -303,24 +304,12 @@ export function ConditionalStepEditor({
                       </div>
                     </div>
 
-                    {/* Next Steps Info */}
-                    <div className="p-2 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-900">
-                      <p className="text-xs text-muted-foreground">
-                        <strong>Next steps:</strong>{' '}
-                        {branch.nextSteps.length === 0 ? (
-                          <span className="text-orange-600 dark:text-orange-400">
-                            No steps configured (workflow will end)
-                          </span>
-                        ) : (
-                          <span className="text-green-600 dark:text-green-400">
-                            {branch.nextSteps.length} step(s) configured
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Note: Nested step editing will be available in a future update
-                      </p>
-                    </div>
+                    {/* Next Steps Editor */}
+                    <BranchStepsEditor
+                      steps={branch.nextSteps}
+                      onStepsChange={(newSteps) => updateBranch(index, { nextSteps: newSteps })}
+                      label="Steps to execute if condition matches"
+                    />
                   </div>
                 )}
               </div>
@@ -332,19 +321,18 @@ export function ConditionalStepEditor({
       {/* Default Branch */}
       {step.config.fieldId && step.config.branches.length > 0 && (
         <div className="p-3 border rounded-md bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
-          <Label className="text-xs">Default Branch (Fallback)</Label>
-          <p className="text-xs text-muted-foreground mt-1">
-            {step.config.defaultBranch && step.config.defaultBranch.length > 0 ? (
-              <span className="text-green-600 dark:text-green-400">
-                {step.config.defaultBranch.length} step(s) configured
-              </span>
-            ) : (
-              <span>No default branch (workflow will end if no conditions match)</span>
-            )}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Note: Default branch editing will be available in a future update
-          </p>
+          <BranchStepsEditor
+            steps={step.config.defaultBranch || []}
+            onStepsChange={(newSteps) =>
+              onChange({
+                config: {
+                  ...step.config,
+                  defaultBranch: newSteps,
+                },
+              })
+            }
+            label="Default Branch (if no conditions match)"
+          />
         </div>
       )}
 
