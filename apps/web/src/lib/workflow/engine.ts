@@ -239,7 +239,12 @@ export class WorkflowEngine {
 
     switch (operator) {
       case 'equals':
-        return value === conditionValue;
+        // Handle boolean comparison with type coercion
+        if (typeof value === 'boolean' || typeof conditionValue === 'boolean') {
+          return Boolean(value) === Boolean(conditionValue);
+        }
+        // Loose equality for other types
+        return value == conditionValue;
       
       case 'contains':
         return String(value).includes(String(conditionValue));

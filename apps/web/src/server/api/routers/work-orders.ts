@@ -368,6 +368,16 @@ export const workOrderRouter = createTRPCRouter({
                   email: true,
                 },
               },
+              submissions: {
+                include: {
+                  formSubmission: {
+                    select: {
+                      id: true,
+                      data: true,
+                    },
+                  },
+                },
+              },
             },
             orderBy: { stepIndex: 'asc' },
           },
@@ -382,19 +392,50 @@ export const workOrderRouter = createTRPCRouter({
       // Get workflow definition steps
       const workflowSteps = (workOrder.workflow.definition as any)?.steps || [];
       const totalSteps = workflowSteps.length;
-      
+
       // Count completed steps from database records
       const completedSteps = workOrder.steps.filter(
         (s) => s.status === 'COMPLETED'
       ).length;
 
-      // Get current step definition from workflow
-      const currentStepDef = workflowSteps[workOrder.currentStepIndex];
-      
-      // Get current step record if it exists
-      const currentStepRecord = workOrder.steps.find(
-        (s) => s.stepIndex === workOrder.currentStepIndex
-      );
+      // Check if there's an execution plan (branch steps being executed)
+      const executionPlan = ((workOrder.data as any)?.executionPlan || []) as any[];
+      let currentStepDef;
+      let currentStepRecord;
+
+      if (executionPlan.length > 0) {
+        // Currently executing a branch step
+        currentStepDef = executionPlan[0];
+        // Branch steps don't have step records yet - they're virtual
+        currentStepRecord = null;
+      } else {
+        // Normal workflow step
+        currentStepDef = workflowSteps[workOrder.currentStepIndex];
+        // Get current step record if it exists
+        currentStepRecord = workOrder.steps.find(
+          (s) => s.stepIndex === workOrder.currentStepIndex
+        );
+      }
+
+      // Build stepData map from completed steps with form submissions
+      const stepData: Record<string, any> = {};
+      workOrder.steps
+        .filter(s => s.status === 'COMPLETED')
+        .forEach(step => {
+          const stepDef = workflowSteps[step.stepIndex];
+          if (stepDef) {
+            // For form steps, use submission data
+            if (step.submissions && step.submissions.length > 0) {
+              const latestSubmission = step.submissions[step.submissions.length - 1];
+              if (latestSubmission.formSubmission) {
+                stepData[stepDef.id] = latestSubmission.formSubmission.data;
+              }
+            } else if (step.data) {
+              // For non-form steps (conditional, etc), use step.data
+              stepData[stepDef.id] = step.data;
+            }
+          }
+        });
 
       return {
         workOrder: {
@@ -411,6 +452,7 @@ export const workOrderRouter = createTRPCRouter({
         currentStep: currentStepDef, // Return workflow definition step
         currentStepRecord, // Also return database record if exists
         workflow: workOrder.workflow,
+        stepData, // ✅ Now includes stepData for condition evaluation
       };
     }),
 
@@ -697,13 +739,14 @@ export const workOrderRouter = createTRPCRouter({
       });
     }),
 
-  // Complete a step (with form submission)
+  // Complete a step (with form submission or conditional metadata)
   completeStep: protectedProcedure
     .input(
       z.object({
         workOrderId: z.string(),
         stepIndex: z.number(),
-        submissionId: z.string(), // ID of the form submission
+        submissionId: z.string().optional(), // Optional for conditional steps
+        metadata: z.record(z.any()).optional(), // For conditional branch decisions
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -757,34 +800,102 @@ export const workOrderRouter = createTRPCRouter({
         });
       }
 
-      // Verify submission exists and belongs to this work order
-      const submission = await ctx.db.formSubmission.findFirst({
-        where: {
-          id: input.submissionId,
-          workOrderId: input.workOrderId,
-        },
-      });
+      // Only verify submission for form steps
+      if (input.submissionId) {
+        const submission = await ctx.db.formSubmission.findFirst({
+          where: {
+            id: input.submissionId,
+            workOrderId: input.workOrderId,
+          },
+        });
 
-      if (!submission) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Submission not found' });
+        if (!submission) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Submission not found' });
+        }
       }
 
-      // Update step to completed
+      // Update step to completed (with metadata if provided)
       const updatedStep = await ctx.db.workOrderStep.update({
         where: { id: step.id },
         data: {
           status: 'COMPLETED',
           completedAt: new Date(),
           completedById: userId,
+          data: input.metadata || null, // Store metadata for conditional steps
         },
       });
 
-      // Check if all steps are completed
+      // Get workflow definition
       const workflow = await ctx.db.workflow.findUnique({
         where: { id: workOrder.workflowId },
       });
-      const totalSteps = (workflow?.definition as any)?.steps?.length || 0;
+      const workflowSteps = (workflow?.definition as any)?.steps || [];
+      const totalSteps = workflowSteps.length;
 
+      // Check if current step is conditional and has metadata
+      const currentStepDef = workflowSteps[input.stepIndex];
+      let nextStepIndex = input.stepIndex + 1;
+
+      if (currentStepDef?.type === 'conditional' && input.metadata) {
+        // Conditional step completed - need to execute branch steps
+        const branchIndex = input.metadata.branchIndex;
+        const branchTaken = input.metadata.branchTaken;
+
+        // Get the selected branch steps
+        let branchSteps: any[] = [];
+        if (branchTaken === 'default' && currentStepDef.config.defaultBranch) {
+          branchSteps = currentStepDef.config.defaultBranch;
+        } else if (typeof branchIndex === 'number' && currentStepDef.config.branches[branchIndex]) {
+          branchSteps = currentStepDef.config.branches[branchIndex].nextSteps || [];
+        }
+
+        // Store branch execution plan in work order data
+        // This is a simple queue of steps to execute before moving to next top-level step
+        const currentExecutionPlan = (workOrder.data as any)?.executionPlan || [];
+        const newExecutionPlan = [
+          ...branchSteps.map((s: any, idx: number) => ({
+            ...s,
+            _branchStepIndex: idx,
+            _parentStepIndex: input.stepIndex,
+          })),
+          ...currentExecutionPlan,
+        ];
+
+        await ctx.db.workOrder.update({
+          where: { id: input.workOrderId },
+          data: {
+            data: {
+              ...((workOrder.data as any) || {}),
+              executionPlan: newExecutionPlan,
+            },
+            status: 'IN_PROGRESS',
+          },
+        });
+
+        return updatedStep;
+      }
+
+      // Check if there's an execution plan (branch steps to execute)
+      const executionPlan = (workOrder.data as any)?.executionPlan || [];
+
+      if (executionPlan.length > 0) {
+        // Still have branch steps to execute, remove completed one
+        const remainingPlan = executionPlan.slice(1);
+        await ctx.db.workOrder.update({
+          where: { id: input.workOrderId },
+          data: {
+            data: {
+              ...((workOrder.data as any) || {}),
+              executionPlan: remainingPlan,
+            },
+            status: 'IN_PROGRESS',
+          },
+        });
+
+        return updatedStep;
+      }
+
+      // No more branch steps, check if workflow is complete
       const completedSteps = await ctx.db.workOrderStep.count({
         where: {
           workOrderId: input.workOrderId,
@@ -792,8 +903,8 @@ export const workOrderRouter = createTRPCRouter({
         },
       });
 
-      // If all steps completed, mark work order as completed
-      if (completedSteps >= totalSteps) {
+      // If all top-level steps completed, mark work order as completed
+      if (nextStepIndex >= totalSteps) {
         await ctx.db.workOrder.update({
           where: { id: input.workOrderId },
           data: {
@@ -807,7 +918,7 @@ export const workOrderRouter = createTRPCRouter({
         await ctx.db.workOrder.update({
           where: { id: input.workOrderId },
           data: {
-            currentStepIndex: input.stepIndex + 1,
+            currentStepIndex: nextStepIndex,
             status: 'IN_PROGRESS',
           },
         });

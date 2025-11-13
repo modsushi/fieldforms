@@ -99,7 +99,12 @@ export function ConditionalStepRenderer({
   ): boolean => {
     switch (operator) {
       case 'equals':
-        return value == compareValue; // Loose equality for type flexibility
+        // Handle boolean comparison with type coercion
+        if (typeof value === 'boolean' || typeof compareValue === 'boolean') {
+          return Boolean(value) === Boolean(compareValue);
+        }
+        // Loose equality for other types
+        return value == compareValue;
 
       case 'contains':
         if (typeof value === 'string' && typeof compareValue === 'string') {
