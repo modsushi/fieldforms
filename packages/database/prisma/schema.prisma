@@ -291,6 +291,7 @@ model WorkOrder {
   claimedById      String?         @map("claimed_by_id") @db.Uuid
   workflowId       String          @map("workflow_id") @db.Uuid
   currentStepIndex Int             @default(0) @map("current_step_index")
+  data             Json            @default("{}") // Store execution plan and other runtime data
   dueDate          DateTime?       @map("due_date")
   completedAt      DateTime?       @map("completed_at")
   createdById      String          @map("created_by_id") @db.Uuid
