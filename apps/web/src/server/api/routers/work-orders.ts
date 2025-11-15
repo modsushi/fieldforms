@@ -776,6 +776,57 @@ export const workOrderRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Work order not found' });
       }
 
+      // Get workflow definition
+      const workflow = await ctx.db.workflow.findUnique({
+        where: { id: workOrder.workflowId },
+      });
+      const workflowSteps = (workflow?.definition as any)?.steps || [];
+      const totalSteps = workflowSteps.length;
+
+      // Check if we're completing a branch step (part of execution plan)
+      const executionPlan = (workOrder.data as any)?.executionPlan || [];
+      const isCompletingBranchStep = executionPlan.length > 0;
+
+      // For branch steps, we don't create WorkOrderStep records
+      // Just handle the submission and update the execution plan
+      if (isCompletingBranchStep) {
+        // Link submission if provided (for form branch steps)
+        if (input.submissionId) {
+          const submission = await ctx.db.formSubmission.findFirst({
+            where: {
+              id: input.submissionId,
+              workOrderId: input.workOrderId,
+            },
+          });
+
+          if (!submission) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Submission not found' });
+          }
+
+          // Branch steps don't have WorkOrderStep records, so we can't link to workOrderStepId
+          // The submission is already linked to the work order
+        }
+
+        // Remove completed branch step from execution plan
+        const remainingPlan = executionPlan.slice(1);
+        const updatedData = {
+          ...((workOrder.data as any) || {}),
+          executionPlan: remainingPlan,
+        };
+
+        await ctx.db.workOrder.update({
+          where: { id: input.workOrderId },
+          data: {
+            data: updatedData,
+            status: 'IN_PROGRESS',
+          },
+        });
+
+        // Return a minimal response for branch steps
+        return { success: true, message: 'Branch step completed' };
+      }
+
+      // Normal workflow step handling (not a branch step)
       // Find or create step
       let step = await ctx.db.workOrderStep.findUnique({
         where: {
@@ -788,10 +839,7 @@ export const workOrderRouter = createTRPCRouter({
 
       if (!step) {
         // Create step if it doesn't exist
-        const workflow = await ctx.db.workflow.findUnique({
-          where: { id: workOrder.workflowId },
-        });
-        const stepDef = (workflow?.definition as any)?.steps?.[input.stepIndex];
+        const stepDef = workflowSteps[input.stepIndex];
 
         step = await ctx.db.workOrderStep.create({
           data: {
@@ -844,13 +892,6 @@ export const workOrderRouter = createTRPCRouter({
         },
       });
 
-      // Get workflow definition
-      const workflow = await ctx.db.workflow.findUnique({
-        where: { id: workOrder.workflowId },
-      });
-      const workflowSteps = (workflow?.definition as any)?.steps || [];
-      const totalSteps = workflowSteps.length;
-
       // Check if current step is conditional and has metadata
       const currentStepDef = workflowSteps[input.stepIndex];
       let nextStepIndex = input.stepIndex + 1;
@@ -869,44 +910,21 @@ export const workOrderRouter = createTRPCRouter({
         }
 
         // Store branch execution plan in work order data
-        // This is a simple queue of steps to execute before moving to next top-level step
-        const currentExecutionPlan = (workOrder.data as any)?.executionPlan || [];
-        const newExecutionPlan = [
-          ...branchSteps.map((s: any, idx: number) => ({
-            ...s,
-            _branchStepIndex: idx,
-            _parentStepIndex: input.stepIndex,
-          })),
-          ...currentExecutionPlan,
-        ];
+        const newExecutionPlan = branchSteps.map((s: any, idx: number) => ({
+          ...s,
+          _branchStepIndex: idx,
+          _parentStepIndex: input.stepIndex,
+        }));
+
+        const updatedData = {
+          ...((workOrder.data as any) || {}),
+          executionPlan: newExecutionPlan,
+        };
 
         await ctx.db.workOrder.update({
           where: { id: input.workOrderId },
           data: {
-            data: {
-              ...((workOrder.data as any) || {}),
-              executionPlan: newExecutionPlan,
-            },
-            status: 'IN_PROGRESS',
-          },
-        });
-
-        return updatedStep;
-      }
-
-      // Check if there's an execution plan (branch steps to execute)
-      const executionPlan = (workOrder.data as any)?.executionPlan || [];
-
-      if (executionPlan.length > 0) {
-        // Still have branch steps to execute, remove completed one
-        const remainingPlan = executionPlan.slice(1);
-        await ctx.db.workOrder.update({
-          where: { id: input.workOrderId },
-          data: {
-            data: {
-              ...((workOrder.data as any) || {}),
-              executionPlan: remainingPlan,
-            },
+            data: updatedData,
             status: 'IN_PROGRESS',
           },
         });
